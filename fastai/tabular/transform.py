@@ -1,7 +1,7 @@
 "Cleaning and feature engineering functions for structured data"
 from ..torch_core import *
 
-__all__ = ['Categorify', 'FillMissing', 'FillStrategy', 'Normalize', 'TabularProc']
+__all__ = ['Categorify', 'FillMissing', 'FillStrategy', 'Normalize', 'TabularProc', 'RemoveMaxCorrelation']
 
 @dataclass
 class TabularProc():
@@ -76,3 +76,38 @@ class Normalize(TabularProc):
     def apply_test(self, df:DataFrame):
         for n in self.cont_names:
             df.loc[:,n] = (df.loc[:,n]-self.means[n]) / (1e-7 + self.stds[n])
+
+@dataclass
+class RemoveMaxCorrelation(TabularProc):
+    """Remove variables above a certain correlation with the target variable (y).
+
+    Args:
+        y_col: The name of the column containing the target variable (y).
+        max_corr: The number of features in the hidden state h. If not specified, the input size is used. Default 0.95.
+        remove_cols: Whether to remove columns with high correlation. Default: True.
+        check_sample: The ratio of the data to use when calculating the correlation. Default: 1.0.
+        verbose: Whether to print information about detected high correlation. Default: True.
+    """
+    y_col:str
+    max_corr:float=0.95
+    remove_cols:bool=True
+    check_sample:float=1.0
+    verbose:bool=True
+
+    def apply_train(self, df:DataFrame):
+        self.cols_to_drop = []
+        for n in self.cont_names:
+            col = df[n]
+            if self.check_sample < 1.0: col = col.sample(int(len(col) * check_sample))
+            n_corr = col.corr(df[self.y_col])
+            if n_corr > self.max_corr:
+                if self.verbose:
+                    if self.remove_cols: print(("Dropping column '%s' since its correlation with the target variable of %0.4f is"
+                                               + " above the threshold") % (n, n_corr))
+                    else:                print(("Attention: The correlation with the target variable of column '%s' is %0.4f and"
+                                               + " thus above the threshold") % (n, n_corr))
+                if self.remove_cols: self.cols_to_drop.append(n)
+        df.drop(columns=self.cols_to_drop, inplace=True)
+
+    def apply_test(self, df:DataFrame):
+        df.drop(columns=self.cols_to_drop, inplace=True)
