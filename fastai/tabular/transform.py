@@ -1,7 +1,7 @@
 "Cleaning and feature engineering functions for structured data"
 from ..torch_core import *
 
-__all__ = ['Categorify', 'FillMissing', 'FillStrategy', 'Normalize', 'TabularProc']
+__all__ = ['Categorify', 'FillMissing', 'FillStrategy', 'Normalize', 'TabularProc', 'RemoveMinVariance']
 
 @dataclass
 class TabularProc():
@@ -76,3 +76,61 @@ class Normalize(TabularProc):
     def apply_test(self, df:DataFrame):
         for n in self.cont_names:
             df.loc[:,n] = (df.loc[:,n]-self.means[n]) / (1e-7 + self.stds[n])
+
+def get_freq_ratio(column:Series):
+    """Compute frequency ratio."""
+    value_counts = column.value_counts(normalize=True)
+    if len(value_counts) == 1:
+        return float('inf')
+    most_common_freq, second_most_common_freq = value_counts[:2]
+    frequency_ratio = most_common_freq - second_most_common_freq
+    return frequency_ratio
+
+def get_percent_of_uniq_vals(column:Series):
+    """Compute percent of unique values."""
+    return len(column.unique()) / len(column) * 100
+
+@dataclass
+class RemoveMinVariance(TabularProc):
+    """Remove variables below a certain variance threshold.
+
+    For continuous:
+    Simple variance
+    <link to TransmogrifAI>
+
+    For categorical:
+    Near-zero-variance
+    http://topepo.github.io/caret/pre-processing.html#nzv
+
+    The default parameters for `freq_cut` and `uniq_cut` are taken from:
+    https://github.com/topepo/caret/blob/6546939345fe10649cefcbfee55d58fb682bc902/pkg/caret/R/nearZeroVar.R#L90
+    """
+    min_var:float=0.00001
+    freq_cut:float=95/5
+    uniq_cut:float=10.0
+    remove_cols:bool=True
+    check_sample:float=1.0
+    verbose:bool=True
+
+    def apply_train(self, df:DataFrame):
+        self.cols_to_drop = []
+        for n in self.cont_names:
+            col = df[n]
+            if self.check_sample < 1.0: col = col.sample(int(len(col) * check_sample))
+            n_variance = col.var()
+            if n_variance < self.min_var:
+                if self.verbose:
+                    if self.remove_cols: print(("Dropping column '%s' since its variance of %0.4f"
+                                                + " is below the threshold") % (n, n_variance))
+                    else:                print(("Attention: The variance of column '%s' is %0.4f"
+                                                + " and thus below the threshold") % (n, n_variance))
+                if self.remove_cols: self.cols_to_drop.append(n)
+        for n in self.cat_names:
+            col = df[n]
+            if get_freq_ratio(col) > self.freq_cut and get_percent_of_uniq_vals(col) < self.uniq_cut:
+                if self.verbose: print("Near-zero-variance")
+                if self.remove_cols: self.cols_to_drop.append(n)
+        df.drop(columns=self.cols_to_drop, inplace=True)
+
+    def apply_test(self, df:DataFrame):
+        df.drop(columns=self.cols_to_drop, inplace=True)
