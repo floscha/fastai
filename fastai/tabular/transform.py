@@ -94,16 +94,15 @@ def get_percent_of_uniq_vals(column:Series):
 class RemoveMinVariance(TabularProc):
     """Remove variables below a certain variance threshold.
 
-    For continuous:
-    Simple variance
-    <link to TransmogrifAI>
+    For continuous variables:
+        Simple variance like used by TransmogrifAI:
+        https://github.com/salesforce/TransmogrifAI/blob/master/core/src/main/scala/com/salesforce/op/stages/impl/preparators/SanityChecker.scala
 
-    For categorical:
-    Near-zero-variance
-    http://topepo.github.io/caret/pre-processing.html#nzv
-
-    The default parameters for `freq_cut` and `uniq_cut` are taken from:
-    https://github.com/topepo/caret/blob/6546939345fe10649cefcbfee55d58fb682bc902/pkg/caret/R/nearZeroVar.R#L90
+    For categorical variables:
+        Near-zero-variance:
+        http://topepo.github.io/caret/pre-processing.html#nzv
+        The default parameters for `freq_cut` and `uniq_cut` are taken from:
+        https://github.com/topepo/caret/blob/6546939345fe10649cefcbfee55d58fb682bc902/pkg/caret/R/nearZeroVar.R#L90
     """
     min_var:float=0.00001
     freq_cut:float=95/5
